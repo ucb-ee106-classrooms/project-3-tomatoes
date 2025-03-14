@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.constants as constants
 plt.rcParams['font.family'] = ['Arial']
 plt.rcParams['font.size'] = 14
 
@@ -205,12 +206,27 @@ class DeadReckoning(Estimator):
     def __init__(self, is_noisy=False):
         super().__init__(is_noisy)
         self.canvas_title = 'Dead Reckoning'
+        self.time_step = 0
+        self.old_x = None
 
     def update(self, _):
-        if len(self.x_hat) > 0:
-            # TODO: Your implementation goes here!
-            # You may ONLY use self.u and self.x[0] for estimation
-            raise NotImplementedError
+        if len(self.x_hat) > 0 and len(self.u) > self.time_step:
+        # TODO: Your implementation goes here!
+        # You may ONLY use self.u and self.x[0] for estimation
+            if self.time_step == 0:
+                self.old_x = self.x[0]
+            u_1, u_2 = self.u[self.time_step][0], self.u[self.time_step][1]
+            phi = self.old_x[2]
+            term0 = self.old_x[3]
+            term1 = self.old_x[4]
+            term2 = self.old_x[5]
+            term3 = (-u_1 * np.sin(phi)) / self.m
+            term4 = -constants.g + (u_1 * np.cos(phi)) / self.m
+            term5 = u_2 / self.J
+            new_x = self.old_x + np.array([term0, term1, term2, term3, term4, term5]) * self.dt
+            self.x_hat.append(new_x)
+            self.old_x = new_x
+            self.time_step += 1
 
 # noinspection PyPep8Naming
 class ExtendedKalmanFilter(Estimator):
