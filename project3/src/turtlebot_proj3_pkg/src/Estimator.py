@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 plt.rcParams['font.family'] = ['FreeSans', 'Helvetica', 'Arial']
 plt.rcParams['font.size'] = 14
+np.random.seed(44)
 
 
 class Estimator:
@@ -294,17 +295,38 @@ class KalmanFilter(Estimator):
     def __init__(self):
         super().__init__()
         self.canvas_title = 'Kalman Filter'
+        self.time_step = 0
         self.phid = np.pi / 4
+        self.old_x = None
         # TODO: Your implementation goes here!
         # You may define the A, C, Q, R, and P matrices below.
+        self.A = np.eye(4)
+        self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
+        self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+        self.Q = np.array([[0.001, 0, 0, 0], [0, 0.001, 0, 0], [0, 0, 0.001, 0], [0, 0, 0, 0.001]])
+        self.R = np.array([[0.1, 0], [0, 0.1]])
+        self.old_P = np.array([[3, 0, 0, 0], [0, 3, 0, 0], [0, 0, 3, 0], [0, 0, 0, 3]])
 
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > self.time_step:
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            if self.time_step == 0:
+                self.old_x = self.x[0][2:]
+            u = self.u[self.time_step][1:]
+            new_x = self.A @ self.old_x + self.B @ u + np.random.multivariate_normal([0, 0, 0, 0], self.Q)
+            self.old_P = self.A @ self.old_P @ self.A.T + self.Q
+            K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
+            y = self.C @ new_x + np.random.multivariate_normal([0, 0], self.R)
+            new_x = new_x + K @ (y - self.C @ new_x)
+            self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
+            term0 = self.u[self.time_step][0]
+            new_x = np.array([term0, self.phid, new_x[0], new_x[1], new_x[2], new_x[3]])
+            self.x_hat.append(new_x)
+            self.old_x = new_x[2:]
+            self.time_step += 1
 
 
 # noinspection PyPep8Naming
