@@ -263,7 +263,7 @@ class ExtendedKalmanFilter(Estimator):
         self.lx, self.ly, self.lz = self.landmark
         self.old_x = None
         self.A = np.eye(4)
-        self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
+        #self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
         self.Q = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
         self.R = np.array([[0.1, 0], [0, 0.1]])
@@ -280,12 +280,14 @@ class ExtendedKalmanFilter(Estimator):
             u = self.u[self.time_step]
             conditional_x = self.g(self.old_x, u) # extrapolated state 
             self.A = self.approx_A(self.old_x, u)
-            P = self.A @ self.old_P @ self.A.T + self.Q
+            self.old_P = self.A @ self.old_P @ self.A.T + self.Q
             self.C = self.approx_C(conditional_x)
-            K = P @ self.C.T @ np.linalg.inv(self.C @ P @ self.C.T + self.R)
+            K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
             new_x = conditional_x + K @ (self.h(conditional_x, self.y[i]))
-            self.old_P = (np.eye(4) - K @ self.C) @ P
+            self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
             self.x_hat.append(new_x)
+            self.old_x = new_x
+            self.time_step += 1
 
 
     def g(self, x, u):
