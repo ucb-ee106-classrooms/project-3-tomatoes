@@ -260,6 +260,7 @@ class ExtendedKalmanFilter(Estimator):
         # TODO: Your implementation goes here!
         # You may define the Q, R, and P matrices below.
         self.time_step = 0
+        self.lx, self.ly, self.lz = self.landmark
         self.old_x = None
         self.A = np.eye(4)
         self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
@@ -274,29 +275,58 @@ class ExtendedKalmanFilter(Estimator):
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
             if self.time_step == 0:
-                self.old_x = self.x[0][2:]
-            u = self.u[self.time_step][1:]
-            new_x = self.A @ self.old_x + self.B @ u + np.random.multivariate_normal([0, 0, 0, 0], self.Q)
-            self.old_P = self.A @ self.old_P @ self.A.T + self.Q
-            K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
-            y = self.C @ new_x + np.random.multivariate_normal([0, 0], self.R)
-            new_x = new_x + K @ (y - self.C @ new_x)
-            self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
-            term0 = self.u[self.time_step][0]
-            new_x = np.array([term0, self.phid, new_x[0], new_x[1], new_x[2], new_x[3]])
+                self.old_x = self.x_hat[0]
+            
+            u = self.u[self.time_step]
+            conditional_x = self.g(self.old_x, u) # extrapolated state 
+            self.A = self.approx_A(self.old_x, u)
+            P = self.A @ self.old_P @ self.A.T + self.Q
+            self.C = self.approx_C(conditional_x)
+            K = P @ self.C.T @ np.linalg.inv(self.C @ P @ self.C.T + self.R)
+            new_x = conditional_x + K @ (self.h(conditional_x, self.y[i]))
+            self.old_P = (np.eye(4) - K @ self.C) @ P
             self.x_hat.append(new_x)
-            self.old_x = new_x[2:]
-            self.time_step += 1
 
 
     def g(self, x, u):
-        raise NotImplementedError
+        u_1, u_2 = u
+        phi = x[2]
+        dv = x[3]
+        dz = x[4]
+        dphi = x[5]
+        ddv = (-u_1 * np.sin(phi)) / self.m
+        ddz = -constants.g + (u_1 * np.cos(phi)) / self.m
+        ddphi = u_2 / self.J
+        new_x = x + np.array([dv, dz, dphi, ddv, ddz, ddphi]) * self.dt
+        return new_x
 
-    def h(self, x, y_obs):
-        raise NotImplementedError
+    def h(self, x_hat, y_obs):
+        x, z, phi = x_hat[0], x_hat[1], x_hat[2]
+        dist = ((self.lx - x) ** 2 + self.ly ** 2 + (self.lz - z) ** 2) ** 0.5
+        h_x_hat = np.zeros((2, 1))
+        h_x_hat[0, 0] = dist
+        h_x_hat[1, 0] = phi
 
+        return y_obs - h_x_hat
+  
     def approx_A(self, x, u):
-        raise NotImplementedError
+        u_1, _ = u
+        phi, dphi = x[2], x[5]
+        dg = np.eye(6)
+        dg[0, 3] = dg[1, 4] = dg[2, 5] = self.dt
+        dg[3, 2] = -(u_1 * np.cos(phi) * dphi * self.dt) / self.m
+        dg[4, 2] = -(u_1 * np.sin(phi) * dphi * self.dt) / self.m
+        return dg
+
     
     def approx_C(self, x):
-        raise NotImplementedError
+        x_i, z = x[0], x[1]
+        dist = ((self.lx - x_i) ** 2 + self.ly ** 2 + (self.lz - z) ** 2) ** 0.5
+        dh1_dx1 = -(self.lx - x_i)/dist
+        dh1_dx2 = -(self.lz - z)/dist
+        dh2_dx3 = 1
+        dh_dx = np.zeros((2, 6))
+        dh_dx[0, 0] = dh1_dx1
+        dh_dx[0, 1] = dh1_dx2
+        dh_dx[1, 2] = dh2_dx3
+        return dh_dx
