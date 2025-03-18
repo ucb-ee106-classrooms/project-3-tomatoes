@@ -303,9 +303,9 @@ class KalmanFilter(Estimator):
         self.A = np.eye(4)
         self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
-        self.Q = np.array([[0.001, 0, 0, 0], [0, 0.001, 0, 0], [0, 0, 0.001, 0], [0, 0, 0, 0.001]])
+        self.Q = np.array([[0.1, 0, 0, 0], [0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1]])
         self.R = np.array([[0.1, 0], [0, 0.1]])
-        self.old_P = np.array([[3, 0, 0, 0], [0, 3, 0, 0], [0, 0, 3, 0], [0, 0, 0, 3]])
+        self.old_P = np.array([[5, 0, 0, 0], [0, 5, 0, 0], [0, 0, 5, 0], [0, 0, 0, 5]])
 
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
@@ -316,10 +316,10 @@ class KalmanFilter(Estimator):
             if self.time_step == 0:
                 self.old_x = self.x[0][2:]
             u = self.u[self.time_step][1:]
-            new_x = self.A @ self.old_x + self.B @ u + np.random.multivariate_normal([0, 0, 0, 0], self.Q)
+            new_x = self.A @ self.old_x + self.B @ u
             self.old_P = self.A @ self.old_P @ self.A.T + self.Q
             K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
-            y = self.C @ new_x + np.random.multivariate_normal([0, 0], self.R)
+            y = self.y[self.time_step][1:]
             new_x = new_x + K @ (y - self.C @ new_x)
             self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
             term0 = self.u[self.time_step][0]
