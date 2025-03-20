@@ -265,7 +265,7 @@ class ExtendedKalmanFilter(Estimator):
         self.A = np.eye(6)
         self.Q = np.diag([5] * 6)
         self.R = np.array([[0.5, 0], [0, 0.5]])
-        self.old_P = np.diag([2] * 6)
+        self.P = np.diag([2] * 6)
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0:
@@ -276,11 +276,11 @@ class ExtendedKalmanFilter(Estimator):
             u = self.u[i - 1]
             conditional_x = self.g(self.old_x, u) # extrapolated state 
             self.A = self.approx_A(conditional_x, u)
-            self.old_P = self.A @ self.old_P @ self.A.T + self.Q
+            P = self.A @ self.P @ self.A.T + self.Q
             self.C = self.approx_C(conditional_x)
-            K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
+            K = P @ self.C.T @ np.linalg.inv(self.C @ P @ self.C.T + self.R)
             new_x = conditional_x + K @ (self.h(conditional_x, self.y[i]))
-            self.old_P = (np.eye(6) - K @ self.C) @ self.old_P
+            self.P = (np.eye(6) - K @ self.C) @ P
             self.x_hat.append(new_x)
             self.old_x = new_x
 
@@ -313,6 +313,7 @@ class ExtendedKalmanFilter(Estimator):
         dg[0, 3] = dg[1, 4] = dg[2, 5] = self.dt
         dg[3, 2] = -(u_1 * np.cos(phi) * dphi * self.dt) / self.m
         dg[4, 2] = -(u_1 * np.sin(phi) * dphi * self.dt) / self.m
+        
         return dg
 
     
