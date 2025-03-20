@@ -262,32 +262,27 @@ class ExtendedKalmanFilter(Estimator):
         self.time_step = 0
         self.lx, self.ly, self.lz = self.landmark
         self.old_x = None
-        self.A = np.eye(4)
-        #self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
-        self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
-        self.Q = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-        self.R = np.array([[0.1, 0], [0, 0.1]])
-        self.old_P = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-
+        self.A = np.eye(6)
+        self.Q = np.diag([5] * 6)
+        self.R = np.array([[0.5, 0], [0, 0.5]])
+        self.old_P = np.diag([2] * 6)
     # noinspection DuplicatedCode
     def update(self, i):
-        if len(self.x_hat) > 0 and len(self.u) > self.time_step:
+        if len(self.x_hat) > 0:
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
-            if self.time_step == 0:
+            if i == 1:
                 self.old_x = self.x_hat[0]
-            
-            u = self.u[self.time_step]
+            u = self.u[i - 1]
             conditional_x = self.g(self.old_x, u) # extrapolated state 
-            self.A = self.approx_A(self.old_x, u)
+            self.A = self.approx_A(conditional_x, u)
             self.old_P = self.A @ self.old_P @ self.A.T + self.Q
             self.C = self.approx_C(conditional_x)
             K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
             new_x = conditional_x + K @ (self.h(conditional_x, self.y[i]))
-            self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
+            self.old_P = (np.eye(6) - K @ self.C) @ self.old_P
             self.x_hat.append(new_x)
             self.old_x = new_x
-            self.time_step += 1
 
 
     def g(self, x, u):
@@ -305,10 +300,10 @@ class ExtendedKalmanFilter(Estimator):
     def h(self, x_hat, y_obs):
         x, z, phi = x_hat[0], x_hat[1], x_hat[2]
         dist = ((self.lx - x) ** 2 + self.ly ** 2 + (self.lz - z) ** 2) ** 0.5
-        h_x_hat = np.zeros((2, 1))
-        h_x_hat[0, 0] = dist
-        h_x_hat[1, 0] = phi
+        h_x_hat = np.zeros((2, ))
 
+        h_x_hat[0] = dist
+        h_x_hat[1] = phi
         return y_obs - h_x_hat
   
     def approx_A(self, x, u):
