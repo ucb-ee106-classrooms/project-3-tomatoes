@@ -263,9 +263,9 @@ class ExtendedKalmanFilter(Estimator):
         self.lx, self.ly, self.lz = self.landmark
         self.old_x = None
         self.A = np.eye(6)
-        self.Q = np.diag([5] * 6)
-        self.R = np.array([[0.5, 0], [0, 0.5]])
-        self.P = np.diag([2] * 6)
+        self.Q = np.diag([1, 1, 1, 0.1, 0.1, 0.1])
+        self.R = np.diag([30, 10])
+        self.P = np.diag([5, 5, 5, 1, 1, 1])
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0:
@@ -275,7 +275,7 @@ class ExtendedKalmanFilter(Estimator):
                 self.old_x = self.x_hat[0]
             u = self.u[i - 1]
             conditional_x = self.g(self.old_x, u) # extrapolated state 
-            self.A = self.approx_A(conditional_x, u)
+            self.A = self.approx_A(self.old_x, u)
             P = self.A @ self.P @ self.A.T + self.Q
             self.C = self.approx_C(conditional_x)
             K = P @ self.C.T @ np.linalg.inv(self.C @ P @ self.C.T + self.R)
@@ -319,7 +319,7 @@ class ExtendedKalmanFilter(Estimator):
     
     def approx_C(self, x):
         x_i, z = x[0], x[1]
-        dist = ((self.lx - x_i) ** 2 + self.ly ** 2 + (self.lz - z) ** 2) ** 0.5
+        dist = ((self.lx - x_i) ** 2 + (self.ly ** 2)+ (self.lz - z) ** 2) ** 0.5
         dh1_dx1 = -(self.lx - x_i)/dist
         dh1_dx2 = -(self.lz - z)/dist
         dh2_dx3 = 1
