@@ -248,6 +248,7 @@ class DeadReckoning(Estimator):
         self.canvas_title = 'Dead Reckoning'
         self.time_step = 0
         self.old_x = None
+        self.start_time = rospy.Time.now().secs
 
     def update(self, _):
         
@@ -268,6 +269,14 @@ class DeadReckoning(Estimator):
             self.x_hat.append(new_x)
             self.old_x = new_x
             self.time_step += 1
+            
+            # calculate error
+            all_errors = []
+            for ground_truth, estimate in zip(self.x, self.x_hat):
+                all_errors.append(np.linalg.norm(np.array(ground_truth[2:4]) - np.array(estimate[2:4])))
+            all_errors = np.array(all_errors)
+            avg_time = (rospy.Time.now().secs - self.start_time) / self.time_step
+            print(np.sqrt(np.mean(all_errors**2)), np.mean(np.abs(all_errors)), avg_time)
 
 
 class KalmanFilter(Estimator):
@@ -298,6 +307,7 @@ class KalmanFilter(Estimator):
         self.time_step = 0
         self.phid = np.pi / 4
         self.old_x = None
+        self.start_time = rospy.Time.now().secs
         # TODO: Your implementation goes here!
         # You may define the A, C, Q, R, and P matrices below.
         self.A = np.eye(4)
@@ -327,6 +337,15 @@ class KalmanFilter(Estimator):
             self.x_hat.append(new_x)
             self.old_x = new_x[2:]
             self.time_step += 1
+
+            # calculate error
+            all_errors = []
+            for ground_truth, estimate in zip(self.x, self.x_hat):
+                all_errors.append(np.linalg.norm(np.array(ground_truth[2:4]) - np.array(estimate[2:4])))
+            all_errors = np.array(all_errors)
+            avg_time = (rospy.Time.now().secs - self.start_time) / self.time_step
+            print(np.sqrt(np.mean(all_errors**2)), np.mean(np.abs(all_errors)), avg_time)
+
 
 
 # noinspection PyPep8Naming
@@ -361,13 +380,64 @@ class ExtendedKalmanFilter(Estimator):
         super().__init__()
         self.canvas_title = 'Extended Kalman Filter'
         self.landmark = (0.5, 0.5)
+        self.time_step = 0
+        self.phid = np.pi / 4
+        self.old_x = None
+        self.start_time = rospy.Time.now().secs
         # TODO: Your implementation goes here!
-        # You may define the Q, R, and P matrices below.
+        # You may define the A, C, Q, R, and P matrices below.
+        self.A = np.eye(4)
+        self.B = np.array([[self.r / 2 * np.cos(self.phid), self.r / 2 * np.cos(self.phid)], [self.r / 2 * np.sin(self.phid), self.r / 2 * np.sin(self.phid)], [1, 0], [0, 1]]) * self.dt
+        self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+        self.Q = np.array([[0.1, 0, 0, 0], [0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1]])
+        self.R = np.array([[0.1, 0], [0, 0.1]])
+        self.old_P = np.array([[5, 0, 0, 0], [0, 5, 0, 0], [0, 0, 5, 0], [0, 0, 0, 5]])
 
     # noinspection DuplicatedCode
+    # noinspection PyPep8Naming
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > self.time_step:
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            if self.time_step == 0:
+                self.old_x = self.x[0][2:]
+            u = self.u[self.time_step][1:]
+            new_x = self.A @ self.old_x + self.B @ u
+            self.old_P = self.A @ self.old_P @ self.A.T + self.Q
+            K = self.old_P @ self.C.T @ np.linalg.inv(self.C @ self.old_P @ self.C.T + self.R)
+            y = self.y[self.time_step][1:]
+            new_x = new_x + K @ (y - self.C @ new_x)
+            self.old_P = (np.eye(4) - K @ self.C) @ self.old_P
+            term0 = self.u[self.time_step][0]
+            new_x = np.array([term0, self.phid, new_x[0], new_x[1], new_x[2], new_x[3]])
+            self.x_hat.append(new_x)
+            self.old_x = new_x[2:]
+            self.time_step += 1
 
+            # calculate error
+            all_errors = []
+            for ground_truth, estimate in zip(self.x, self.x_hat):
+                all_errors.append(np.linalg.norm(np.array(ground_truth[2:4]) - np.array(estimate[2:4])))
+            all_errors = np.array(all_errors)
+            avg_time = (rospy.Time.now().secs - self.start_time) / self.time_step
+            print(np.sqrt(np.mean(all_errors**2)), np.mean(np.abs(all_errors)), avg_time)
+
+
+    def h(self, x_hat, y_obs):
+        x, phi = x_hat[0], x_hat[2]
+        dist = ((self.lx - x) ** 2 + self.ly ** 2) ** 0.5
+        h_x_hat = np.zeros((2, ))
+
+        h_x_hat[0] = dist
+        h_x_hat[1] = phi
+        return y_obs - h_x_hat
+  
+    def approx_A(self, x, u):
+        u_1, _ = u
+        phi, dphi = x[2], x[5]
+        dg = np.eye(6)
+        dg[0, 3] = dg[1, 4] = dg[2, 5] = self.dt
+        dg[3, 2] = -(u_1 * np.cos(phi) * dphi * self.dt) / self.m
+        dg[4, 2] = -(u_1 * np.sin(phi) * dphi * self.dt) / self.m
+        
+        return dg

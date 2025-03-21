@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants as constants
+import time
 plt.rcParams['font.family'] = ['Arial']
 plt.rcParams['font.size'] = 14
-
 
 class Estimator:
     """A base class to represent an estimator.
@@ -208,6 +208,7 @@ class DeadReckoning(Estimator):
         self.canvas_title = 'Dead Reckoning'
         self.time_step = 0
         self.old_x = None
+        self.start_time = time.time()
 
     def update(self, _):
         if len(self.x_hat) > 0 and len(self.u) > self.time_step:
@@ -227,6 +228,14 @@ class DeadReckoning(Estimator):
             self.x_hat.append(new_x)
             self.old_x = new_x
             self.time_step += 1
+
+            # calculate error
+            all_errors = []
+            for ground_truth, estimate in zip(self.x, self.x_hat):
+                all_errors.append(np.linalg.norm(np.array(ground_truth[2:4]) - np.array(estimate[2:4])))
+            all_errors = np.array(all_errors)
+            avg_time = (time.time() - self.start_time) / self.time_step
+            print(np.sqrt(np.mean(all_errors**2)), np.mean(np.abs(all_errors)), avg_time)
 
 # noinspection PyPep8Naming
 class ExtendedKalmanFilter(Estimator):
@@ -262,6 +271,7 @@ class ExtendedKalmanFilter(Estimator):
         self.time_step = 0
         self.lx, self.ly, self.lz = self.landmark
         self.old_x = None
+        self.start_time = time.time()
         self.A = np.eye(6)
         self.Q = np.diag([1, 1, 1, 0.1, 0.1, 0.1])
         self.R = np.diag([30, 10])
@@ -283,6 +293,14 @@ class ExtendedKalmanFilter(Estimator):
             self.P = (np.eye(6) - K @ self.C) @ P
             self.x_hat.append(new_x)
             self.old_x = new_x
+
+            # calculate error
+            all_errors = []
+            for ground_truth, estimate in zip(self.x, self.x_hat):
+                all_errors.append(np.linalg.norm(np.array(ground_truth[2:4]) - np.array(estimate[2:4])))
+            all_errors = np.array(all_errors)
+            avg_time = (time.time() - self.start_time) / i
+            print(np.sqrt(np.mean(all_errors**2)), np.mean(np.abs(all_errors)), avg_time)
 
 
     def g(self, x, u):
